@@ -1,14 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
-from app.core.security import create_access_token, decode_access_token, hash_password, verify_password
+from app.core.security import create_access_token, hash_password, verify_password
+from app.core.deps import get_current_user
 from app.db.database import get_db
 from app.models.user import User, UserRole
 from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
-bearer_scheme = HTTPBearer()
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -46,15 +45,5 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
 
 # This endpoint decodes the JWT -> reads the user ID from the payload -> fetches the live user record from the database
 @router.get("/me", response_model=UserResponse)
-def get_me(
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme), # FastAPI dependency injection for Authorization: Bearer <token> header (it extracts it automatically and passes it to the function)
-    db: Session = Depends(get_db),
-):
-    payload = decode_access_token(credentials.credentials)
-    if payload is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
-
-    user = db.get(User, int(payload["sub"]))
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return user
+def get_me(current_user: User = Depends(get_current_user)):
+    return current_user
