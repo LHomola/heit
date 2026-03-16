@@ -1,20 +1,33 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from typing import List
 
 from app.core.deps import get_current_user
 from app.db.database import get_db
 from app.models.ticket import Ticket
 from app.models.user import User, UserRole
-from app.schemas.ticket import TicketCreate, TicketResponse
+from app.schemas.ticket import TicketCreate, TicketResponse, TicketStatusUpdate
 
 router = APIRouter(prefix="/tickets", tags=["tickets"])
+
+
+# Check if the user is authorized to access a ticket (used by both GET /tickets/{id} and PATCH /tickets/{id}/status)
+# As one of cybersecurity best practices, raising 404 errorto prevent confirming whether a ticket exists to user who is not authorized to see them
+def _check_ticket_access(ticket: Ticket, user: User) -> None:
+    if user.role == UserRole.manager:
+        return  # managers is allowed to see everything
+    if user.role == UserRole.resident and ticket.created_by == user.id:
+        return  # residents can only see their own tickets
+    if user.role == UserRole.contractor and ticket.assigned_to == user.id:
+        return  # contractors are only allowed to see tickets which have been assigned to them
+    raise HTTPException(status_code=404, detail="Ticket not found")
 
 
 @router.post("/", response_model=TicketResponse, status_code=status.HTTP_201_CREATED)
 def create_ticket(
     body: TicketCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),  # get the info about logged in user which is from the decoded JWT
+    current_user: User = Depends(get_current_user),  # get the info about logged in user (from the decoded JWT)
 ):
     # Only residents and managers should be able to create a ticket
     if current_user.role == UserRole.contractor:
@@ -38,5 +51,39 @@ def create_ticket(
     )
     db.add(ticket)
     db.commit()
-    db.refresh(ticket)  # read the row again so server that the defaults (status, created_at etc) are populated
+    db.refresh(ticket)  # read the row again so that server defaults (status, created_at etc) are populated
+    return ticket
+
+
+@router.get("/", response_model=List[TicketResponse])
+def list_tickets(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Starting with a base query but then taking into account who is asking:
+    # Managers should see everything
+    # Residents should only see their own tickets
+    # Contractors ahould only see tickets assigned to them
+    q = db.query(Ticket)
+
+    if current_user.role == UserRole.resident:
+        q = q.filter(Ticket.created_by == current_user.id)
+    elif current_user.role == UserRole.contractor:
+        q = q.filter(Ticket.assigned_to == current_user.id)
+
+    return q.order_by(Ticket.created_at.desc()).all()
+
+
+@router.get("/{ticket_id}", response_model=TicketResponse)
+def get_ticket(
+    ticket_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # primary key lookup
+    ticket = db.get(Ticket, ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+
+    _check_ticket_access(ticket, current_user)
     return ticket
