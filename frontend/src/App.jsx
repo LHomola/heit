@@ -1,48 +1,41 @@
-import { useState } from 'react'
-import Login from './pages/Login'
+import { useState } from "react";
+import Login from "./pages/Login";
+import TicketList from "./pages/TicketList";
 
 function App() {
-  const [response, setResponse] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
-  const [currentUser, setCurrentUser] = useState(null)
+  const [currentUser, setCurrentUser] = useState(null);
+  const [token, setToken]           = useState(null);
 
-  const callBackend = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await fetch('/api/health')
-      const data = await res.json()
-      setResponse(data)
-    } catch (err) {
-      setError('Could not reach the backend')
-    } finally {
-      setLoading(false)
-    }
+  function handleLogin(user, accessToken) {
+    setCurrentUser(user);
+    setToken(accessToken);
+  }
+
+  function handleLogout() {
+    localStorage.removeItem("heit_token");
+    setCurrentUser(null);
+    setToken(null);
   }
 
   return (
-    <div style={{ fontFamily: 'Arial' }}>
-      {/* Health check*/}
-      <div style={{ padding: '1rem 2rem', background: '#f8f8f8', borderBottom: '1px solid #ddd' }}>
-        <strong>Health check:</strong>{' '}
-        <button onClick={callBackend} disabled={loading}>
-          {loading ? 'Calling...' : 'Ping Backend'}
-        </button>
-        {response && <code style={{ marginLeft: '1rem' }}>{JSON.stringify(response)}</code>}
-        {error && <span style={{ color: 'red', marginLeft: '1rem' }}>{error}</span>}
-      </div>
-
-      {/* Login form */}
-      <Login onLogin={(user) => setCurrentUser(user)} />
-
+    <div style={{ fontFamily: "Arial" }}>
+      {/* Logout button */}
       {currentUser && (
-        <p style={{ textAlign: 'center', color: '#888' }}>
-          Logged in as <strong>{currentUser.full_name}</strong> ({currentUser.role})
-        </p>
+        <div style={{ padding: "0.5rem 2rem", background: "#f8f8f8", borderBottom: "1px solid #ddd", fontSize: "0.85rem" }}>
+          <button onClick={handleLogout}>
+            Log out ({currentUser.full_name})
+          </button>
+        </div>
+      )}
+
+      {/* If user is not logged in, display login form, otherwise display a list of their tickets */}
+      {!currentUser ? (
+        <Login onLogin={handleLogin} />
+      ) : (
+        <TicketList token={token} />
       )}
     </div>
-  )
+  );
 }
 
-export default App
+export default App;
