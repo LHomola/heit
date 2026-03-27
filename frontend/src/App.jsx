@@ -1,41 +1,34 @@
-import { useState } from "react";
-import Login from "./pages/Login";
-import TicketList from "./pages/TicketList";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider } from "./context/AuthContext";
+import ProtectedRoute from "./components/ProtectedRoute";
+import LoginPage from "./pages/LoginPage";
+import Dashboard from "./pages/Dashboard";
+import TicketDetailPage from "./pages/TicketDetailPage";
+import CreateTicketPage from "./pages/CreateTicketPage";
 
-function App() {
-  const [currentUser, setCurrentUser] = useState(null);
-  const [token, setToken]           = useState(null);
-
-  function handleLogin(user, accessToken) {
-    setCurrentUser(user);
-    setToken(accessToken);
-  }
-
-  function handleLogout() {
-    localStorage.removeItem("heit_token");
-    setCurrentUser(null);
-    setToken(null);
-  }
-
+export default function App() {
   return (
-    <div style={{ fontFamily: "Arial" }}>
-      {/* Logout button */}
-      {currentUser && (
-        <div style={{ padding: "0.5rem 2rem", background: "#f8f8f8", borderBottom: "1px solid #ddd", fontSize: "0.85rem" }}>
-          <button onClick={handleLogout}>
-            Log out ({currentUser.full_name})
-          </button>
-        </div>
-      )}
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login" element={<LoginPage />} />
 
-      {/* If user is not logged in, display login form, otherwise display a list of their tickets */}
-      {!currentUser ? (
-        <Login onLogin={handleLogin} />
-      ) : (
-        <TicketList token={token} />
-      )}
-    </div>
+          <Route path="/dashboard" element={
+            <ProtectedRoute><Dashboard /></ProtectedRoute>
+          } />
+
+          <Route path="/tickets/new" element={
+            <ProtectedRoute><CreateTicketPage /></ProtectedRoute>
+          } />
+
+          <Route path="/tickets/:id" element={
+            <ProtectedRoute><TicketDetailPage /></ProtectedRoute>
+          } />
+
+          {/* Path that is not recognized is redirected to dashboard again */}
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   );
 }
-
-export default App;

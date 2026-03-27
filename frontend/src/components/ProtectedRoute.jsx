@@ -1,0 +1,10 @@
+import { Navigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
+
+// All protected pages (that require authentication) get the Layout (NavBar) injected automatically
+// Users who have not been verified are sent to /login
+export default function ProtectedRoute({ children }) {
+  const { token } = useAuth();
+  if (!token) return <Navigate to="/login" replace />;
+  return children;
+}

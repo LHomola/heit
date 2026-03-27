@@ -1,20 +1,22 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Box, Button, Container, TextField,
-  Typography, Alert, Paper
+  Typography, Alert, Paper,
 } from "@mui/material";
+import { useAuth } from "../context/AuthContext";
 
-export default function Login({ onLogin }) {
-  const [email, setEmail]       = useState("");
+export default function LoginPage() {
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError]       = useState("");
-  const [user, setUser]         = useState(null);
+  const [error, setError] = useState("");
+  const { login } = useAuth();
+  const navigate = useNavigate();
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
 
-    // Get token
     const loginRes = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -28,9 +30,7 @@ export default function Login({ onLogin }) {
     }
 
     const { access_token } = await loginRes.json();
-    localStorage.setItem("heit_token", access_token);
 
-    // Confirm identity
     const meRes = await fetch("/api/auth/me", {
       headers: { Authorization: `Bearer ${access_token}` },
     });
@@ -41,27 +41,8 @@ export default function Login({ onLogin }) {
     }
 
     const me = await meRes.json();
-    setUser(me);
-    if (onLogin) onLogin(me, access_token);
-  }
-
-  if (user) {
-    return (
-      <Container maxWidth="sm" sx={{ mt: 8 }}>
-        <Paper elevation={3} sx={{ p: 4 }}>
-          <Typography variant="h5" gutterBottom>Logged in</Typography>
-          <Typography><strong>Name:</strong> {user.full_name}</Typography>
-          <Typography><strong>Email:</strong> {user.email}</Typography>
-          <Typography><strong>Role:</strong> {user.role}</Typography>
-          <Button
-            sx={{ mt: 2 }} variant="outlined"
-            onClick={() => { localStorage.removeItem("heit_token"); setUser(null); }}
-          >
-            Log out
-          </Button>
-        </Paper>
-      </Container>
-    );
+    login(me, access_token);
+    navigate("/dashboard");
   }
 
   return (
