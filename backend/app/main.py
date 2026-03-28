@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from app.db.database import SessionLocal
-from app.routers import auth, tickets
+from app.routers import auth, tickets, users
 
 app = FastAPI(title="HEIT API", version="0.2.0")
 
@@ -16,6 +16,7 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(tickets.router)
+app.include_router(users.router)
 
 @app.get("/health")
 def health():

@@ -35,3 +35,11 @@ class UserResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+# This summary only provides basic user details for lists of users so as to prevent revealing sensitive user data
+class UserSummary(BaseModel):
+    id: int # primary key
+    full_name: str
+
+    # Pydantic can read data from SQLAlchemy model attributes
+    model_config = {"from_attributes": True}
