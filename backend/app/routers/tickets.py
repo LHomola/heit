@@ -8,7 +8,7 @@ from app.db.database import get_db
 from app.models.ticket import Ticket, TicketStatus
 from app.models.ticket_status_history import TicketStatusHistory
 from app.models.user import User, UserRole
-from app.schemas.ticket import TicketCreate, TicketResponse, TicketStatusUpdate
+from app.schemas.ticket import TicketCreate, TicketResponse, TicketStatusUpdate, TicketAssign
 
 router = APIRouter(prefix="/tickets", tags=["tickets"])
 
@@ -87,6 +87,69 @@ def get_ticket(
         raise HTTPException(status_code=404, detail="Ticket not found")
 
     _check_ticket_access(ticket, current_user)
+    return ticket
+
+@router.patch("/{ticket_id}/assign", response_model=TicketResponse)
+def assign_ticket(
+    ticket_id: int,
+    body: TicketAssign,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Assign a ticket to a contractor.
+
+    Upon calling this endpoint, the following will happen:
+    1. The manager_id value is automatically set to the ID of the staff who is currently logged in
+    1. Assigned_to value is set to the selected contractor
+    3. Ticket status is set to 'assigned' (this is especially useful if a ticket was previously
+		being managed by a different contractor - the new contractor needs to acknowledge
+		the ticket by moving it to 'in_progress' to ensure everything is tracked in the ticket history
+    """
+
+    # If the logged in user is not a manager, throw an exception
+    if current_user.role != UserRole.manager:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only managers are allowed to assign tickets",
+        )
+
+    # Use the ticket ID to find the ticket and throw an exception if the ticket is not found
+    ticket = db.get(Ticket, ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket was not found")
+
+    # Confirm that the ID of the user we are assigning to actually exists in the db and that it belongs to a contractor
+    contractor = db.get(User, body.assigned_to)
+    if not contractor or contractor.role != UserRole.contractor:
+        raise HTTPException(
+            status_code=400,
+            detail="The value in assigned_to field must belong to an existing contractor!",
+        )
+
+    # Take a note of the old status
+    old_status = ticket.status
+
+    # Update the assignment fields
+    ticket.manager_id = current_user.id
+    ticket.assigned_to = body.assigned_to # new contractor
+    ticket.status = TicketStatus.assigned
+    ticket.updated_at = datetime.now(timezone.utc)
+
+    # Check if ticket status is changing (e.g., we are not just reassiggning the ticket to a different contractor)
+    # If the ticket was already assigned to a contractor, skip the history row
+    if old_status != TicketStatus.assigned:
+        db.add(TicketStatusHistory(
+            ticket_id = ticket_id,
+            old_status = old_status,
+            new_status = TicketStatus.assigned,
+            changed_by = current_user.id,
+            note = f"Ticket has been assigned to contractor (user id {body.assigned_to})",
+        ))
+
+    # Commit the updates
+    db.commit()
+    db.refresh(ticket)
     return ticket
 
 @router.patch("/{ticket_id}/status", response_model=TicketResponse)

@@ -13,13 +13,13 @@ class TicketCreate(BaseModel):
     photo_url:   Optional[str] = None
 
 
-# note field is optional but allow managers to leave a comment explaining why they changed the ticket's status
+# Note field is optional but allow managers to leave a comment explaining why they changed the ticket's status
 class TicketStatusUpdate(BaseModel):
     status: TicketStatus
     note:   Optional[str] = None
 
 
-# Details send back to client 
+# Details send back to client
 # Model_config from_attributes tells Pydantic that it can read values directly from SQLAlchemy model object
 class TicketResponse(BaseModel):
     id:            int
@@ -37,3 +37,8 @@ class TicketResponse(BaseModel):
     updated_at:    datetime
 
     model_config = {"from_attributes": True}
+
+# Request body for ticket assignment endpoint
+# After staff selects a contractor from the dropdown, the contractor's user id is validated by the endpoint to confirm that it actually belongs to a contractor
+class TicketAssign(BaseModel):
+    assigned_to: int
