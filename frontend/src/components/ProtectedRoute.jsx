@@ -7,5 +7,6 @@ import Layout from "./Layout"; // imported here so the pages don't need to impor
 export default function ProtectedRoute({ children }) {
   const { token } = useAuth();
   if (!token) return <Navigate to="/login" replace />;
-  return children;
+  // Wrap the page content in Layout so the NavBar appears on every protected page
+  return <Layout>{children}</Layout>;
 }
