@@ -25,6 +25,7 @@ services:
       - ./backend:/app
     environment:
       DATABASE_URL: postgresql://heit_user:heit_password@postgres:5432/heit
+      GEMINI_API_KEY: AIzaSyAeaA5bPP_zir9pitKTXZjH8kWRzvgRjbc
     depends_on:
       postgres:
         condition: service_healthy

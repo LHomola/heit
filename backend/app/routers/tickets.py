@@ -1,8 +1,10 @@
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
+import google.generativeai as genai
 from sqlalchemy.orm import Session
 from typing import List
 
+from app.core.config import settings
 from app.core.deps import get_current_user
 from app.db.database import get_db
 from app.models.ticket import Ticket, TicketStatus
@@ -199,6 +201,85 @@ def update_ticket_status(
         note=body.note,
     )
     db.add(history_row)
+    db.commit()
+    db.refresh(ticket)
+    return ticket
+
+@router.post("/{ticket_id}/ai-suggest", response_model=TicketResponse)
+def ai_suggest(
+    ticket_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Obtain a suggestion for resolving a ticket from Google Gemini.
+
+    This endpoint sends the ticket's title and description to the Google
+    Gemini API and asks for help with resolving the issue. The response
+    will be saved to the ticket's ai_suggestion column so that it only needs to be
+    generated once, when viewing the ticket again the
+    saved suggestion will be displayed as well without making another API call.
+
+    Only residents can request AI suggestions, however, if needed, the feature
+    can be implemented for management staff or for contractors as well.
+    """
+
+    # Only residents can request AI suggestions
+    if current_user.role != UserRole.resident:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only residents can request AI suggestions",
+        )
+
+    # Looking the ticket up
+    ticket = db.get(Ticket, ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket was not found")
+
+    # Residents are only allowed to get suggestions for their own tickets
+    if ticket.created_by != current_user.id:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+
+    # If a suggestion already exists for the given ticket, the ticket is returned without calling the API again
+    if ticket.ai_suggestion:
+        return ticket
+
+    # Check that the API key is configured
+    if not settings.GEMINI_API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AI service is not configured",
+        )
+
+    # Here we build the prompt for Gemini
+    prompt = (
+        "You are a helpful assistant for a residential housing estate. "
+        "A resident has reported the following maintenance issue.\n\n"
+        f"Title: {ticket.title}\n"
+        f"Description: {ticket.description}\n\n"
+        "Suggest 3-5 practical steps the resident could take to resolve "
+        "or mitigate this issue themselves before a contractor is sent. "
+        "Keep the language simple and focus on safe, non-technical actions. "
+        "If the issue clearly requires a professional (e.g. gas leak, "
+        "structural damage), say so and advise the resident not to attempt "
+        "a fix themselves."
+    )
+
+    # Call the Gemini API
+    try:
+        genai.configure(api_key=settings.GEMINI_API_KEY)
+        model = genai.GenerativeModel("gemini-2.5-flash")
+        response = model.generate_content(prompt)
+        suggestion = response.text
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"AI service error: {str(e)}",
+        )
+
+    # Save the suggestion to the ticket so it does not need to be generated again
+    ticket.ai_suggestion = suggestion
+    ticket.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(ticket)
     return ticket
