@@ -51,11 +51,15 @@ export default function TicketDetailPage() {
   const [assignError, setAssignError] = useState("");
   const [assignSuccess, setAssignSuccess] = useState("");
 
-  // State opf the status update form(used by managers and contractors)
+  // State of the status update form(used by managers and contractors)
   const [newStatus, setNewStatus] = useState(""); // selected status value
   const [statusNote, setStatusNote] = useState(""); // optional note explaining the change
   const [statusError, setStatusError] = useState("");
   const [statusSuccess, setStatusSuccess] = useState("");
+
+  // State of AI suggestion
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState("");
 
   // Load ticket data
   useEffect(() => {
@@ -137,6 +141,30 @@ export default function TicketDetailPage() {
     setTicket(updated);
     setStatusSuccess("Status updated");
     setStatusNote("");
+  }
+
+  // Handler for requesting an AI suggestion from the backend
+  async function handleAiSuggest() {
+    setAiLoading(true);
+    setAiError("");
+    try {
+      const res = await fetch(`/api/tickets/${id}/ai-suggest`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setAiError(data.detail || "AI suggestion failed");
+        return;
+      }
+      // Update local ticket state so that the suggestion appears immediately
+      const updated = await res.json();
+      setTicket(updated);
+    } catch (e) {
+      setAiError("Failed to connect to AI service");
+    } finally {
+      setAiLoading(false);
+    }
   }
 
   // Loading and error states
@@ -269,6 +297,34 @@ export default function TicketDetailPage() {
                 Save Status
               </Button>
             </Box>
+          </>
+        )}
+
+        {/* AI Suggestion section only for residents */}
+        {currentUser.role === "resident" && (
+          <>
+            <Divider sx={{ my: 3 }} />
+            <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 2 }}>
+              AI Suggestion
+            </Typography>
+
+            {aiError && <Alert severity="error" sx={{ mb: 2 }}>{aiError}</Alert>}
+
+            {ticket.ai_suggestion ? (
+              <Paper variant="outlined" sx={{ p: 2, bgcolor: "grey.50" }}>
+                <Typography variant="body2" sx={{ whiteSpace: "pre-line" }}>
+                  {ticket.ai_suggestion}
+                </Typography>
+              </Paper>
+            ) : (
+              <Button
+                variant="outlined"
+                onClick={handleAiSuggest}
+                disabled={aiLoading}
+              >
+                {aiLoading ? "Getting suggestion…" : "Get AI Suggestion"}
+              </Button>
+            )}
           </>
         )}
       </Paper>
