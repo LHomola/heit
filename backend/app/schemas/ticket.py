@@ -10,7 +10,6 @@ class TicketCreate(BaseModel):
     description: str
     category_id: int
     is_public:   bool = False
-    photo_url:   Optional[str] = None
 
 
 # Note field is optional but allow managers to leave a comment explaining why they changed the ticket's status
@@ -31,7 +30,6 @@ class TicketResponse(BaseModel):
     manager_id:    Optional[int]
     assigned_to:   Optional[int]
     is_public:     bool
-    photo_url:     Optional[str]
     ai_suggestion: Optional[str]
     created_at:    datetime
     updated_at:    datetime

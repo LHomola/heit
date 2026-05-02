@@ -22,7 +22,6 @@ class Ticket(Base):
     manager_id    = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     assigned_to   = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     is_public     = Column(Boolean, nullable=False, server_default=text("false"))
-    photo_url     = Column(String(500), nullable=True)
     ai_suggestion = Column(Text, nullable=True)
     created_at    = Column(DateTime(timezone=True), nullable=False, server_default=text("now()"))
     updated_at    = Column(DateTime(timezone=True), nullable=False, server_default=text("now()"))

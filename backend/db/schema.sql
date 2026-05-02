@@ -70,7 +70,6 @@ CREATE TABLE tickets (
     manager_id      INT             REFERENCES users(id) ON DELETE SET NULL,
     assigned_to     INT             REFERENCES users(id) ON DELETE SET NULL,
     is_public       BOOLEAN         NOT NULL DEFAULT FALSE,
-    photo_url       VARCHAR(500),
     ai_suggestion   TEXT,
     created_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ     NOT NULL DEFAULT NOW()
@@ -95,18 +94,6 @@ CREATE TABLE ticket_status_history (
 );
 
 CREATE INDEX idx_tsh_ticket_id ON ticket_status_history(ticket_id);
-
--- Ticket comments
-
-CREATE TABLE ticket_comments (
-    id          SERIAL          PRIMARY KEY,
-    ticket_id   INT             NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
-    author_id   INT             NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
-    body        TEXT            NOT NULL,
-    created_at  TIMESTAMPTZ     NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX idx_comments_ticket_id ON ticket_comments(ticket_id);
 
 -- Ticket likes
 

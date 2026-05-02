@@ -6,8 +6,6 @@
  * - Ticket description
  * - Issue type categories
  * - Option to make the ticket public
- *
- * Still to do - photo upload functionality
  */
 
 import { useEffect, useState } from "react";

@@ -49,7 +49,6 @@ def create_ticket(
         description=body.description,
         category_id=body.category_id,
         is_public=body.is_public,
-        photo_url=body.photo_url,
         created_by=current_user.id,  # use token (instead of the request body)
     )
     db.add(ticket)
