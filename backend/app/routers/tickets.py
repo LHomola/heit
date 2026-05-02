@@ -13,7 +13,7 @@ from app.models.ticket import Ticket, TicketStatus
 from app.models.ticket_status_history import TicketStatusHistory
 from app.models.user import User, UserRole
 from app.models.ticket_like import TicketLike
-from app.schemas.ticket import LikeActionResponse, NoticeBoardTicket, TicketCreate, TicketResponse, TicketStatusUpdate, TicketAssign
+from app.schemas.ticket import LikeActionResponse, NoticeBoardTicket, TicketAssign, TicketCreate, TicketResponse, TicketStatusUpdate, TicketVisibilityUpdate
 
 router = APIRouter(prefix="/tickets", tags=["tickets"])
 
@@ -218,6 +218,46 @@ def assign_ticket(
         ))
 
     # Commit the updates
+    db.commit()
+    db.refresh(ticket)
+    return ticket
+
+
+@router.patch("/{ticket_id}/visibility", response_model=TicketResponse)
+def update_ticket_visibility(
+    ticket_id: int,
+    body: TicketVisibilityUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Toggle a ticket's is_public setting.
+
+    A resident can decide when creating a ticket whether it should public or not.
+    This endpoint lets them change the setting afterwards.
+
+    Residents can only change visibility on tickets that they created.
+    Managers can change visibility on any ticket.
+    Contractors cannot change visibility of tickets at all.
+    """
+
+    ticket = db.get(Ticket, ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+
+    # Check if user is authorized to change the setting
+    is_manager = current_user.role == UserRole.manager
+    is_owning_resident = (
+        current_user.role == UserRole.resident
+        and ticket.created_by == current_user.id
+    )
+    if not (is_manager or is_owning_resident):
+        raise HTTPException(status_code=404, detail="Ticket not found")
+
+    # Update and timestamp the change
+    ticket.is_public = body.is_public
+    ticket.updated_at = datetime.now(timezone.utc)
+
     db.commit()
     db.refresh(ticket)
     return ticket

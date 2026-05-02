@@ -50,7 +50,12 @@ class NoticeBoardTicket(TicketResponse):
     liked_by_me: bool
 
 
-# Returned for by POST and DELETE requests to /tickets/{id}/like
+# Returned by POST and DELETE requests to /tickets/{id}/like
 class LikeActionResponse(BaseModel):
     like_count:  int
     liked_by_me: bool
+
+
+# Body for PATCH /tickets/{id}/visibility - used to toggle public status of a ticket
+class TicketVisibilityUpdate(BaseModel):
+    is_public: bool
