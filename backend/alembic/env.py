@@ -30,7 +30,7 @@ target_metadata = Base.metadata
 
 # Only track tables that have a corresponding SQLAlchemy model.
 # Remove a table name from this set when you add its model in app/models/.
-MODELLED_TABLES = {"users", "categories", "tickets", "ticket_status_history"}
+MODELLED_TABLES = {"users", "categories", "tickets", "ticket_status_history", "ticket_likes"}
 
 def include_object(object, name, type_, reflected, compare_to):
     if type_ == "table" and name not in MODELLED_TABLES:
