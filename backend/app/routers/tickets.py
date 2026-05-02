@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 import google.generativeai as genai
+from sqlalchemy import func, literal, select
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -10,7 +11,8 @@ from app.db.database import get_db
 from app.models.ticket import Ticket, TicketStatus
 from app.models.ticket_status_history import TicketStatusHistory
 from app.models.user import User, UserRole
-from app.schemas.ticket import TicketCreate, TicketResponse, TicketStatusUpdate, TicketAssign
+from app.models.ticket_like import TicketLike
+from app.schemas.ticket import NoticeBoardTicket, TicketCreate, TicketResponse, TicketStatusUpdate, TicketAssign
 
 router = APIRouter(prefix="/tickets", tags=["tickets"])
 
@@ -75,6 +77,70 @@ def list_tickets(
 
     return q.order_by(Ticket.created_at.desc()).all()
 
+
+@router.get("/notice-board", response_model=List[NoticeBoardTicket])
+def list_notice_board(
+    sort: str = "recent",
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Public notice board. This route returns all tickets that have been marked as public
+    by the user creating the ticket. 
+
+    There are two additional fields attached per each ticket: 
+    how many likes does the ticket have and whether the requesting user has already liked it.
+
+    Any authenticated user of the application can view access the board.
+    """
+
+    # Validate the sorting option
+    if sort not in {"recent", "liked"}:
+        raise HTTPException(
+            status_code=400,
+            detail="Select 'recent' or 'liked'",
+        )
+
+    # Like count for each ticket
+    like_count_col = (
+        select(func.count(TicketLike.id))
+        .where(TicketLike.ticket_id == Ticket.id)
+        .correlate(Ticket)
+        .scalar_subquery()
+        .label("like_count")
+    )
+
+    # Check if the user has already liked the ticket
+    liked_by_me_col = (
+        select(literal(1))
+        .where(TicketLike.ticket_id == Ticket.id)
+        .where(TicketLike.user_id == current_user.id)
+        .correlate(Ticket)
+        .exists()
+        .label("liked_by_me")
+    )
+
+    # Get a tuple of the ticket instance, like_count and liked_by_me
+    q = (
+        db.query(Ticket, like_count_col, liked_by_me_col)
+        .filter(Ticket.is_public.is_(True))
+    )
+
+    if sort == "liked":
+        # sort tickets by created_at if two tickets have the same amount of likes
+        q = q.order_by(like_count_col.desc(), Ticket.created_at.desc())
+    else:
+        q = q.order_by(Ticket.created_at.desc())
+
+    rows = q.all()
+
+    # Add the values to the Ticket instance so for later processing by Pydantic
+    result = []
+    for ticket, like_count, liked_by_me in rows:
+        ticket.like_count = like_count
+        ticket.liked_by_me = liked_by_me
+        result.append(ticket)
+    return result
 
 @router.get("/{ticket_id}", response_model=TicketResponse)
 def get_ticket(

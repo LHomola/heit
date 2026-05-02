@@ -40,3 +40,9 @@ class TicketResponse(BaseModel):
 # After staff selects a contractor from the dropdown, the contractor's user id is validated by the endpoint to confirm that it actually belongs to a contractor
 class TicketAssign(BaseModel):
     assigned_to: int
+
+# Notice board ticket shares the same fields as TicketResponse but also includes:
+# like count (count of like rows) and liked_by_me (does the requestor have a row for this ticket already)
+class NoticeBoardTicket(TicketResponse):
+    like_count:  int
+    liked_by_me: bool
