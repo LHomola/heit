@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 import google.generativeai as genai
 from sqlalchemy import func, literal, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -12,7 +13,7 @@ from app.models.ticket import Ticket, TicketStatus
 from app.models.ticket_status_history import TicketStatusHistory
 from app.models.user import User, UserRole
 from app.models.ticket_like import TicketLike
-from app.schemas.ticket import NoticeBoardTicket, TicketCreate, TicketResponse, TicketStatusUpdate, TicketAssign
+from app.schemas.ticket import LikeActionResponse, NoticeBoardTicket, TicketCreate, TicketResponse, TicketStatusUpdate, TicketAssign
 
 router = APIRouter(prefix="/tickets", tags=["tickets"])
 
@@ -142,6 +143,7 @@ def list_notice_board(
         result.append(ticket)
     return result
 
+
 @router.get("/{ticket_id}", response_model=TicketResponse)
 def get_ticket(
     ticket_id: int,
@@ -155,6 +157,7 @@ def get_ticket(
 
     _check_ticket_access(ticket, current_user)
     return ticket
+
 
 @router.patch("/{ticket_id}/assign", response_model=TicketResponse)
 def assign_ticket(
@@ -219,6 +222,7 @@ def assign_ticket(
     db.refresh(ticket)
     return ticket
 
+
 @router.patch("/{ticket_id}/status", response_model=TicketResponse)
 def update_ticket_status(
     ticket_id: int,
@@ -269,6 +273,7 @@ def update_ticket_status(
     db.commit()
     db.refresh(ticket)
     return ticket
+
 
 @router.post("/{ticket_id}/ai-suggest", response_model=TicketResponse)
 def ai_suggest(
@@ -348,3 +353,71 @@ def ai_suggest(
     db.commit()
     db.refresh(ticket)
     return ticket
+
+
+@router.post("/{ticket_id}/like", response_model=LikeActionResponse, status_code=201)
+def like_ticket(
+    ticket_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Update database to show that the user has liked a ticket on the notice board.
+
+    The database checks if the ticket has already been liked and rejects the request with 409 if that's the case.
+    """
+
+    # Check that the ticket exists and is set as public
+    ticket = db.get(Ticket, ticket_id)
+    if not ticket or not ticket.is_public:
+        # Either the ticket isn't there or it isn't public — either way
+        # the caller has no business knowing the difference.
+        raise HTTPException(status_code=404, detail="Ticket not found")
+
+    db.add(TicketLike(ticket_id=ticket_id, user_id=current_user.id))
+
+    try:
+        db.commit()
+    except IntegrityError:
+        # Roll back if ticket has already been liked and throw an error
+        db.rollback()
+        raise HTTPException(status_code=409, detail="Already liked")
+
+    # Once the change has been commited, count likes again
+    like_count = db.query(func.count(TicketLike.id)).filter(
+        TicketLike.ticket_id == ticket_id
+    ).scalar()
+
+    return LikeActionResponse(like_count=like_count, liked_by_me=True)
+
+
+@router.delete("/{ticket_id}/like", response_model=LikeActionResponse)
+def unlike_ticket(
+    ticket_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Update the database to show that the user has unliked a ticket on the notice board.
+
+    If there is no like to remove the request simply returns the current like count.
+    """
+
+    # Check that the ticket exists and is set as public
+    ticket = db.get(Ticket, ticket_id)
+    if not ticket or not ticket.is_public:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+
+    # Using filter to delete the like to achieve idempotent behaviour where the request simply returns 0 if there are no matchin rows
+    db.query(TicketLike).filter(
+        TicketLike.ticket_id == ticket_id,
+        TicketLike.user_id == current_user.id,
+    ).delete()
+    db.commit()
+
+    # Once the change has been commited, count likes again
+    like_count = db.query(func.count(TicketLike.id)).filter(
+        TicketLike.ticket_id == ticket_id
+    ).scalar()
+
+    return LikeActionResponse(like_count=like_count, liked_by_me=False)
