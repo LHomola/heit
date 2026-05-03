@@ -5,6 +5,7 @@ import LoginPage from "./pages/LoginPage";
 import Dashboard from "./pages/Dashboard";
 import TicketDetailPage from "./pages/TicketDetailPage";
 import CreateTicketPage from "./pages/CreateTicketPage";
+import NoticeBoardPage from "./pages/NoticeBoardPage";
 
 export default function App() {
   return (
@@ -23,6 +24,10 @@ export default function App() {
 
           <Route path="/tickets/:id" element={
             <ProtectedRoute><TicketDetailPage /></ProtectedRoute>
+          } />
+
+          <Route path="/notice-board" element={
+            <ProtectedRoute><NoticeBoardPage /></ProtectedRoute>
           } />
 
           {/* Path that is not recognized is redirected to dashboard again */}

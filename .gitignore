@@ -18,3 +18,4 @@ postgres_data/
 .vscode/
 .idea/
 *.swp
+.env

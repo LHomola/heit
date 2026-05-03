@@ -14,8 +14,8 @@ import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   Alert, Box, Button, Chip, CircularProgress, Container,
-  Divider, FormControl, InputLabel, MenuItem,
-  Paper, Select, TextField, Typography,
+  Divider, FormControl, FormControlLabel, InputLabel, MenuItem,
+  Paper, Select, Switch, TextField, Typography,
 } from "@mui/material";
 import { useAuth } from "../context/AuthContext";
 
@@ -60,6 +60,10 @@ export default function TicketDetailPage() {
   // State of AI suggestion
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState("");
+
+  // State of the ticket's visibility
+  const [visibilityError, setVisibilityError] = useState("");
+  const [visibilitySaving, setVisibilitySaving] = useState(false);
 
   // Load ticket data
   useEffect(() => {
@@ -167,6 +171,34 @@ export default function TicketDetailPage() {
     }
   }
 
+  // Handler for switching the ticket's public state
+  async function handleVisibilityToggle(e) {
+    const newValue = e.target.checked;
+    setVisibilityError("");
+    setVisibilitySaving(true);
+
+    const res = await fetch(`/api/tickets/${id}/visibility`, {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ is_public: newValue }),
+    });
+
+    setVisibilitySaving(false);
+
+    if (!res.ok) {
+      const data = await res.json();
+      setVisibilityError(data.detail || "Visibility was not updated");
+      return;
+    }
+
+    // Storing updated ticket received from the server
+    const updated = await res.json();
+    setTicket(updated);
+  }
+
   // Loading and error states
   if (loading) return (
     <Box sx={{ display: "flex", justifyContent: "center", mt: 8 }}>
@@ -190,7 +222,7 @@ export default function TicketDetailPage() {
   return (
     <Container maxWidth="md" sx={{ mt: 4 }}>
       {/* Back button */}
-      <Button onClick={() => navigate("/dashboard")} sx={{ mb: 2 }}>← Back</Button>
+      <Button onClick={() => navigate(-1)}>← Back</Button>
 
       <Paper sx={{ p: 3 }}>
         {/* Ticket header */}
@@ -216,6 +248,36 @@ export default function TicketDetailPage() {
           <Typography variant="body2" color="text.secondary">
             Assigned to contractor id: {ticket.assigned_to}
           </Typography>
+        )}
+
+        {/* Visibility toggle (only visible to the creator and any manager) */}
+        {(
+          (currentUser.role === "resident" && ticket.created_by === currentUser.id)
+          || currentUser.role === "manager"
+        ) && (
+          <>
+            <Divider sx={{ my: 3 }} />
+            <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 1 }}>
+              Notice Board Visibility
+            </Typography>
+
+            {visibilityError && <Alert severity="error" sx={{ mb: 2 }}>{visibilityError}</Alert>}
+
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={ticket.is_public}
+                  onChange={handleVisibilityToggle}
+                  disabled={visibilitySaving}
+                />
+              }
+              label={
+                ticket.is_public
+                  ? "Public — anyone can see this ticket on the notice board"
+                  : "Private — only staff and the ticket owner can see this ticket"
+              }
+            />
+          </>
         )}
 
         {/* Manager section for assigning contractors */}

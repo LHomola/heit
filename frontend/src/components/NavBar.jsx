@@ -17,6 +17,13 @@ export default function NavBar() {
         <Typography variant="h6" sx={{ flexGrow: 1 }}>HEIT</Typography>
         {currentUser && (
           <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+            {/* Display the link to the notice board to all users. */}
+            <Button color="inherit" onClick={() => navigate("/notice-board")}>
+              Notice Board
+            </Button>
+            <Button color="inherit" onClick={() => navigate("/dashboard")}>
+              Dashboard
+            </Button>
             <Typography variant="body2">
               {currentUser.full_name} ({currentUser.role})
             </Typography>

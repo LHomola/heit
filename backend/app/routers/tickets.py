@@ -150,12 +150,14 @@ def get_ticket(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    # primary key lookup
     ticket = db.get(Ticket, ticket_id)
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket not found")
 
-    _check_ticket_access(ticket, current_user)
+    # Ensure all residents can open all tickets on the notice board and view their details
+    if not ticket.is_public:
+        _check_ticket_access(ticket, current_user)
+
     return ticket
 
 
