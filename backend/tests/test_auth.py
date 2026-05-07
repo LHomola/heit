@@ -5,7 +5,7 @@ Smoke tests for the auth flow.
 
 def test_registration_login_sequence(client):
     """
-    Register a new resident -> log in -> call /auth/me with the generated token. 
+    Register a new resident -> log in -> call /auth/me with the generated token.
 
     Every step should succeed and return the data given during registration.
     """

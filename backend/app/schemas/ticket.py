@@ -1,6 +1,7 @@
 from datetime import datetime
-from typing import Optional
+
 from pydantic import BaseModel
+
 from app.models.ticket import TicketStatus
 
 
@@ -15,7 +16,7 @@ class TicketCreate(BaseModel):
 # Note field is optional but allow managers to leave a comment explaining why they changed the ticket's status
 class TicketStatusUpdate(BaseModel):
     status: TicketStatus
-    note:   Optional[str] = None
+    note:   str | None = None
 
 
 # Details send back to client
@@ -27,10 +28,10 @@ class TicketResponse(BaseModel):
     category_id:   int
     status:        TicketStatus
     created_by:    int
-    manager_id:    Optional[int]
-    assigned_to:   Optional[int]
+    manager_id:    int | None
+    assigned_to:   int | None
     is_public:     bool
-    ai_suggestion: Optional[str]
+    ai_suggestion: str | None
     created_at:    datetime
     updated_at:    datetime
 

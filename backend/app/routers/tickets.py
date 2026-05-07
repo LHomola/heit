@@ -1,19 +1,27 @@
-from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, status
+from datetime import UTC, datetime
+
 import google.generativeai as genai
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, literal, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
-from typing import List
 
 from app.core.config import settings
 from app.core.deps import get_current_user
 from app.db.database import get_db
 from app.models.ticket import Ticket, TicketStatus
+from app.models.ticket_like import TicketLike
 from app.models.ticket_status_history import TicketStatusHistory
 from app.models.user import User, UserRole
-from app.models.ticket_like import TicketLike
-from app.schemas.ticket import LikeActionResponse, NoticeBoardTicket, TicketAssign, TicketCreate, TicketResponse, TicketStatusUpdate, TicketVisibilityUpdate
+from app.schemas.ticket import (
+    LikeActionResponse,
+    NoticeBoardTicket,
+    TicketAssign,
+    TicketCreate,
+    TicketResponse,
+    TicketStatusUpdate,
+    TicketVisibilityUpdate,
+)
 
 router = APIRouter(prefix="/tickets", tags=["tickets"])
 
@@ -60,7 +68,7 @@ def create_ticket(
     return ticket
 
 
-@router.get("/", response_model=List[TicketResponse])
+@router.get("/", response_model=list[TicketResponse])
 def list_tickets(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
@@ -79,7 +87,7 @@ def list_tickets(
     return q.order_by(Ticket.created_at.desc()).all()
 
 
-@router.get("/notice-board", response_model=List[NoticeBoardTicket])
+@router.get("/notice-board", response_model=list[NoticeBoardTicket])
 def list_notice_board(
     sort: str = "recent",
     db: Session = Depends(get_db),
@@ -87,9 +95,9 @@ def list_notice_board(
 ):
     """
     Public notice board. This route returns all tickets that have been marked as public
-    by the user creating the ticket. 
+    by the user creating the ticket.
 
-    There are two additional fields attached per each ticket: 
+    There are two additional fields attached per each ticket:
     how many likes does the ticket have and whether the requesting user has already liked it.
 
     Any authenticated user of the application can view access the board.
@@ -206,7 +214,7 @@ def assign_ticket(
     ticket.manager_id = current_user.id
     ticket.assigned_to = body.assigned_to # new contractor
     ticket.status = TicketStatus.assigned
-    ticket.updated_at = datetime.now(timezone.utc)
+    ticket.updated_at = datetime.now(UTC)
 
     # Check if ticket status is changing (e.g., we are not just reassiggning the ticket to a different contractor)
     # If the ticket was already assigned to a contractor, skip the history row
@@ -258,7 +266,7 @@ def update_ticket_visibility(
 
     # Update and timestamp the change
     ticket.is_public = body.is_public
-    ticket.updated_at = datetime.now(timezone.utc)
+    ticket.updated_at = datetime.now(UTC)
 
     db.commit()
     db.refresh(ticket)
@@ -297,7 +305,7 @@ def update_ticket_status(
             )
 
     # Record the old status before it gets overwritten
-    ticket.updated_at = datetime.now(timezone.utc)
+    ticket.updated_at = datetime.now(UTC)
     old_status = ticket.status
 
     # Update the ticket
@@ -387,11 +395,11 @@ def ai_suggest(
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"AI service error: {str(e)}",
-        )
+        ) from e
 
     # Save the suggestion to the ticket so it does not need to be generated again
     ticket.ai_suggestion = suggestion
-    ticket.updated_at = datetime.now(timezone.utc)
+    ticket.updated_at = datetime.now(UTC)
     db.commit()
     db.refresh(ticket)
     return ticket
@@ -420,10 +428,10 @@ def like_ticket(
 
     try:
         db.commit()
-    except IntegrityError:
+    except IntegrityError as err:
         # Roll back if ticket has already been liked and throw an error
         db.rollback()
-        raise HTTPException(status_code=409, detail="Already liked")
+        raise HTTPException(status_code=409, detail="Already liked") from err
 
     # Once the change has been commited, count likes again
     like_count = db.query(func.count(TicketLike.id)).filter(

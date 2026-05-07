@@ -1,24 +1,25 @@
 """
 Shared fixtures for HEIT backend test suite.
 
-Tests are run against a real Postgres database (heit_test). Each test is in a transaction that gets rolled back on teardown so that 
+Tests are run against a real Postgres database (heit_test). Each test is in a transaction that gets rolled back on teardown so that
 tests are isolated from each other and the heit_test database is left clean after each test.
 """
 
 import os
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
-from app.main import app
 from app.db.database import Base, get_db
+from app.main import app
 from app.models import (  # noqa: F401  (model modules are imported so that their tables get registered on Base.metadata)
-    user,
     category,
     ticket,
-    ticket_status_history,
     ticket_like,
+    ticket_status_history,
+    user,
 )
 
 # Tests default to a heit_test database on the same Postgres instance as the development database

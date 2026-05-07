@@ -1,4 +1,6 @@
-from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, Text, Enum as SAEnum, text
+from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, Text, text
+from sqlalchemy import Enum as SAEnum
+
 from app.db.database import Base
 from app.models.ticket import TicketStatus
 
