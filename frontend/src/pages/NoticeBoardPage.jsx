@@ -81,7 +81,7 @@ export default function NoticeBoardPage() {
             : t
         )
       );
-    } catch (e) {
+    } catch {
       // if the server rejects the request, undo the change
       setTickets(prev =>
         prev.map(t =>
