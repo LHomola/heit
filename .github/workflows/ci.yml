@@ -184,6 +184,17 @@ jobs:
           tags: heit-backend:scan
           labels: ${{ steps.meta.outputs.labels }}
 
+      - name: Scan image with Trivy (table for log visibility)
+        # Run Trivy in table format first so that anyone reading the workflow log can see exactly which CVEs the gate is reacting to
+        # exit-code is set to 0 so that this step doesn't block the build (it only reports).
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: heit-backend:scan
+          format: table
+          severity: HIGH,CRITICAL
+          exit-code: "0"
+          ignore-unfixed: true
+          
       - name: Scan image with Trivy
         # Trivy is an open source scanner designed to catch known CVEs in operating system packages
         # Setting ignore-unfixed to true to make sure that CVEs with no published fix do not cause a failure without a way to resolve
