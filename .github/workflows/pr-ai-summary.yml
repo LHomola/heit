@@ -1,0 +1,164 @@
+name: PR AI summary
+
+# This action generates an AI summary of every pull request and posts it as an updatable comment
+# to provide reviewers with a high level overview of the changes
+# This feature uses the same GEMINI_API_KEY secret that powers AI suggestion feature in the applicaiton
+
+on:
+  pull_request:
+    # opened: when a PR is first created
+    # synchronize: when new commits are pushed to the PR branch
+    # reopened: when a closed PR is reopened
+    types: [opened, synchronize, reopened]
+
+# If the PR is updated before the current finishes, cancel the run to ensure the latest content is used
+concurrency:
+  group: pr-ai-summary-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  summarize:
+    name: Generate AI summary of PR
+    runs-on: ubuntu-latest
+
+    # Skip PRs opened from a forked repository as they wouldn't have access to GEMINI_API_KEY
+    if: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+
+    steps:
+      - name: Check out PR
+        uses: actions/checkout@v4
+        with:
+          # Fetch the full history
+          fetch-depth: 0
+
+      - name: Get changes for AI summary
+        id: diff
+        run: |
+          # Fetch the main branch so we can compare the PR against it.
+          git fetch origin ${{ github.event.pull_request.base.ref }}
+
+          # Generate the diff but exclude things like lockfiles and minified files
+          git diff origin/${{ github.event.pull_request.base.ref }}...HEAD \
+            --diff-filter=ACDMRT \
+            -- ':!**/package-lock.json' ':!**/yarn.lock' \
+               ':!**/poetry.lock' ':!**/*.min.js' ':!**/*.min.css' \
+            > pr.diff
+
+          # Limit the prompt size under 50000 characters to keep prompt cost as small as possible
+          head -c 50000 pr.diff > pr.diff.trimmed
+          mv pr.diff.trimmed pr.diff
+
+          echo "Diff size: $(wc -c < pr.diff) bytes."
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install Gemini client
+        # Use the same version of the Gemini package as the one
+        # used by backend (backend/requirements.txt) to ensure consistency
+        run: pip install --no-cache-dir google-generativeai==0.8.5
+
+      - name: Generate summary with Gemini
+        id: summary
+        # continue-on-error lets the job continue if there is a problem
+        continue-on-error: true
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          python <<'PYEOF'
+          import os
+          import pathlib
+          import sys
+          import google.generativeai as genai
+
+          # Read the diff generated earlier
+          diff_path = pathlib.Path("pr.diff")
+          diff = diff_path.read_text(errors="replace") if diff_path.exists() else ""
+
+          if not diff.strip():
+              # If the diff is empty (for example, if the update is in one of the excluded files),
+              # there is no need to send request to AI
+              print("Empty filtered diff; skipping summary.")
+              pathlib.Path("summary.md").write_text("")
+              sys.exit(0)
+
+          genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+          model = genai.GenerativeModel("gemini-2.5-flash")
+
+          title = os.environ.get("PR_TITLE", "(none)")
+          body = os.environ.get("PR_BODY", "") or "(empty)"
+
+          # Explain to the AI model what is expected
+          prompt = f"""You are reviewing a pull request to a web application called HEIT (Housing Estate Issue Tracker),
+          built with FastAPI (backend) and React/Vite (frontend).
+          Generate a concise summary for human reviewers in the structure below.
+
+          PR title: {title}
+          PR description: {body}
+
+          Diff:
+          {diff}
+          use these headings:
+          ### What this PR changes
+          ### Files touched
+          ### Things a reviewer should look at carefully
+          ### Suggested manual checks
+
+          The summary should be less than 350 words long and contain anything that's not in the diff (do not invent content).
+          """
+
+          response = model.generate_content(prompt)
+          summary_text = response.text.strip()
+
+          # This marker helps the next step find this comment again on a future run and update it
+          marker = "<!-- pr-ai-summary -->"
+          rendered = (
+              f"{marker}\n\n"
+              f"_Auto-generated summary by pr-ai-summary.yml."
+              f"This is only advisory and has no affect on merging._\n\n"
+              f"{summary_text}\n\n"
+              f"\n"
+              f"_Generated with gemini-2.5-flash. Push again to update._"
+          )
+          pathlib.Path("summary.md").write_text(rendered)
+          print("Done!")
+          PYEOF
+
+        - name: Post summary to the PR
+          # This step should only be executed if the summary file isn't empty
+          env:
+            GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            PR_NUMBER: ${{ github.event.pull_request.number }}
+            REPO: ${{ github.repository }}
+          run: |
+            if [ ! -s summary.md ]; then
+              echo "Summary file is empty."
+              exit 0
+            fi
+
+            # Search for the comment marker from the previous step and update it, otherwise create a new one. 
+            existing_id=$(gh api "repos/${REPO}/issues/${PR_NUMBER}/comments" \
+              --paginate \
+              --jq '.[] | select(.body | contains("<!-- pr-ai-summary -->")) | .id' \
+              | head -n 1)
+
+            if [ -n "$existing_id" ]; then
+              echo "Updating old summary $existing_id"
+              gh api --method PATCH \
+                "repos/${REPO}/issues/comments/${existing_id}" \
+                --field body=@summary.md
+            else
+              echo "Posting a new summary"
+              gh api --method POST \
+                "repos/${REPO}/issues/${PR_NUMBER}/comments" \
+                --field body=@summary.md
+            fi
