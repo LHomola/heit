@@ -1,0 +1,95 @@
+version: 2
+
+# Dependabot watches dependency manifests and opens pull requests when new versions are released so that
+# whenever a vulnerability is found in a package used by HEIT, dependabot handles it in a short period of time.
+# This check complements the weekly security-deep-scan.yml scan.
+# Dependabot will also perform routine version bumps for Python, Node, Docker and Actions 
+# (and should handle the deprecation warnings that are currently in the CI logs)
+# Same as the security-deep-scan.yml scan, dependabot will run on Monday at 6am UTC
+
+updates:
+
+  # Python (backend)
+  # Scan backend requirements (requirements.txt and requirements-dev.txt)
+  # The number of PRs that can be opened is kept at 5 so as not to overload developers  
+  - package-ecosystem: "pip"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "backend"
+    commit-message:
+      prefix: "deps(backend)"
+    # Group minor and patch updates into one PR
+    # Keep major updates separate since they can contain breaking changes and should be reviewed manually
+    groups:
+      backend-minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # npm (frontend)
+  # Scan frontend for package updates
+  # Same grouping logic from Python is applied here as well
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "frontend"
+    commit-message:
+      prefix: "deps(frontend)"
+    groups:
+      frontend-minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Docker
+  # Dependabot monitors the "FROM" instruction in backend/Dockerfile (which is currently set to python:3.11-slim)
+  # There is no need to group PRs as there is only one base image being managed 
+  - package-ecosystem: "docker"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "docker"
+    commit-message:
+      prefix: "deps(docker)"
+
+  # GitHub Actions
+  # This section is responsible for keeping the project's CI workflow up to date by scanning every "uses:" line
+  # in .github/workflows/*.yml and updating the action version pin when a new release is published. 
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"
+    commit-message:
+      prefix: "deps(actions)"
+    groups:
+      actions-minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
