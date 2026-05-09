@@ -1,18 +1,18 @@
 # Web framework
-fastapi==0.111.0
-uvicorn[standard]==0.29.0
-pydantic==2.7.1
-pydantic-settings==2.2.1
+fastapi==0.136.1
+uvicorn[standard]==0.46.0
+pydantic==2.13.4
+pydantic-settings==2.14.1
 
 # Database
-sqlalchemy==2.0.30
-alembic==1.13.1
-psycopg2-binary==2.9.9
+sqlalchemy==2.0.49
+alembic==1.18.4
+psycopg2-binary==2.9.12
 
 # Auth
-python-jose[cryptography]==3.3.0
+python-jose[cryptography]==3.5.0
 passlib[bcrypt]==1.7.4
 bcrypt==4.0.1
 
 # AI (Google Gemini)
-google-generativeai==0.8.5
+google-generativeai==0.8.6
