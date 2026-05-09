@@ -1,0 +1,16 @@
+# CODEOWNERS file defines the individuals responsible for a codebase or parts of a codebase in a repository
+# so that the right people can be automatically assigned to review changes in their areas of expertise.
+
+# Backend (Python / FastAPI) - to be reviewed by Tech Lead / Backend Developer
+/backend/ @LHomola
+
+# Frontend (React / Vite) - to be reviewed by Frontend Developer
+/frontend/ @LukasHomola-L00196709
+
+# CI/CD pipelines, infrastructure, container configuration - can be reviewed both accounts (however, self-approval is not allowed)
+/.github/ @LHomola @LukasHomola-L00196709
+/Dockerfile @LHomola @LukasHomola-L00196709
+/docker-compose.yml @LHomola @LukasHomola-L00196709
+
+# Everything else can be reviewed by both accounts also
+* @LHomola @LukasHomola-L00196709
