@@ -1,0 +1,119 @@
+name: Security deep scan
+
+# This is a scheduled scan designed to discover vulnerabilities that were not known at the time of build
+# and therefore were not discovered by Trivy step in ci.yml. Given that CVE databases get updated, we need to ensure
+# taht the code gets checked regularly.
+# This workflow runs on a weekly cron and scans the working tree (filesystem mode)
+# with two scanners (Trivy and Grype) running in parallel to increase effectivness
+# (they draw from different upstream CVE feed Aqua and Anchore)
+
+on:
+  schedule:
+    # Monday 6:00 UTC (standard time for weekly CVE scans - weekly scan will ensure CVEs are discovered relatively quickly
+    # without cluttering the tracker as would likely be the case with daily scans).
+    - cron: "0 6 * * 1"
+  # The scan can also be manually triggered from the Actions tab.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # Write permission equired by peter-evans/create-issue-from-file
+  issues: write
+
+jobs:
+  scan:
+    name: Weekly filesystem vulnerability scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Trivy filesystem scan
+        id: trivy
+        # continue-on-error lets the workflow continue even if there is a problem
+        # to prevent a failed scan from aborting the job before it can record what it found.
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          severity: HIGH,CRITICAL
+          # Setting ignore-unfixed to true to make sure that CVEs with no published fix do not cause a failure without a way to resolve
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+          output: trivy-fs-report.txt
+
+      - name: Grype filesystem scan
+        id: grype
+        continue-on-error: true
+        uses: anchore/scan-action@v6
+        with:
+          path: "."
+          # same as Trivy's severity filter
+          severity-cutoff: high
+          # same as ignore-unfixed
+          only-fixed: true
+          fail-build: true
+          output-format: table
+
+      - name: Normalise Grype output location
+        # Grype step creates results.txt file in the workspace root in table mode. 
+        # It needs to be renamed to the convention that the issue-body step expects,
+        # or fall back to a placeholder if anything went wrong.
+        if: always()
+        run: |
+          if [ -f results.txt ]; then
+            mv results.txt grype-fs-report.txt
+          else
+            echo "(grype output file not found - see workflow logs for detail)" > grype-fs-report.txt
+          fi
+
+      - name: Build issue body
+        if: steps.trivy.outcome == 'failure' || steps.grype.outcome == 'failure'
+        run: |
+          {
+            echo "# Weekly security scan: HIGH/CRITICAL findings"
+            echo
+            echo "_Generated automatically by \`security-deep-scan.yml\` on $(date -u '+%Y-%m-%d %H:%M UTC')._"
+            echo
+            echo "Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo
+            echo "Two scanners ran against the working tree. Each finding listed below is HIGH or CRITICAL severity with a fix available upstream. Findings without a published fix are intentionally excluded - they are not actionable today and would only repeat each week."
+            echo
+            echo "## Trivy"
+            echo
+            echo '```'
+            cat trivy-fs-report.txt 2>/dev/null || echo "(no Trivy report produced)"
+            echo '```'
+            echo
+            echo "## Grype"
+            echo
+            echo '```'
+            cat grype-fs-report.txt 2>/dev/null || echo "(no Grype report produced)"
+            echo '```'
+            echo
+            echo "## Next Steps"
+            echo
+            echo "- [ ] **Verify Impact:** Check if the library is used in production or just a dev/test dependency."
+            echo "- [ ] **Quick Fix:** Try updating the version in \`backend/requirements.txt\` or \`frontend/package.json\`."
+            echo "- [ ] **Verify:** Run the local test suite (\`pytest\` or \`vitest\`) to ensure the update didn't break anything."
+            echo "- [ ] **Blocked Update:** If a direct update is blocked by other dependencies, evaluate if we can swap the parent package."
+            echo "- [ ] **Resolution:** Close this issue once each finding is either patched or has a written justification for being deferred."
+          } > issue-body.md
+
+      # GitHub Issue is created when a HIGH or CRITICAL finding with an available fix is detected
+      - name: Open issue with findings
+        if: steps.trivy.outcome == 'failure' || steps.grype.outcome == 'failure'
+        uses: peter-evans/create-issue-from-file@v5
+        with:
+          title: "Weekly security scan — HIGH/CRITICAL findings detected"
+          content-filepath: issue-body.md
+          labels: |
+            security
+            automated
+
+      - name: Confirm clean run
+        if: steps.trivy.outcome == 'success' && steps.grype.outcome == 'success'
+        run: echo "No HIGH/CRITICAL findings with available fixes were detected by either scanner -> no new issue has been opened."
