@@ -1,0 +1,244 @@
+name: CD - Production
+
+# Unlike staging, this workflow only runs when it is triggered manually (workflow_dispatch),
+# or when a version tag like "v1.0" is pushed
+on:
+  workflow_dispatch:
+    inputs:
+      image_sha:
+        description: "Git SHA of the image to deploy."
+        required: false
+        type: string
+  push:
+    tags:
+      - "v*"
+
+# To prevent Render from from getting confused, only one production deploy can run at a time
+concurrency:
+  group: cd-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to Render production
+    runs-on: ubuntu-latest
+
+    # Use "production" environment and environment secrets set up in GitHub
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_URL }}
+
+    permissions:
+      contents: read
+
+    # Store job outputs so that rollback can reference the previous image and release jobs can reference the deployed image
+      image_ref: ${{ steps.image.outputs.ref }}
+      previous_image: ${{ steps.previous.outputs.image }}
+
+    steps:
+      - name: Determine which image to use
+        # If a tag is pushed, deploy the SHA tag built by ci.yml on that commit.
+        # If the run is triggered manually, the user can provide an SHA (e.g., to redeploy an older build)
+        id: image
+        env:
+          INPUT_SHA: ${{ inputs.image_sha }}
+        run: |
+          SHA="${INPUT_SHA:-${GITHUB_SHA}}"
+          if [ -z "$SHA" ]; then
+            echo "Could not find an SHA to deploy!" >&2
+            exit 1
+          fi
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/heit-backend:sha-${SHA}"
+          echo "ref=${IMAGE}" >> "$GITHUB_OUTPUT"
+          echo "sha=${SHA}" >> "$GITHUB_OUTPUT"
+          echo "Deploying image: ${IMAGE}"
+
+      - name: Save the currently deployed version
+        # Save the URL of the currently running version in case we need to roll back
+        id: previous
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_PRODUCTION_SERVICE_ID }}
+        run: |
+          : "${RENDER_API_KEY:?RENDER_API_KEY is missing}"
+          : "${RENDER_SERVICE_ID:?RENDER_PRODUCTION_SERVICE_ID is missing}"
+
+          PREV_IMAGE=$(curl --fail-with-body --silent --show-error \
+            "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys?limit=20" \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            -H "Accept: application/json" \
+            | jq -r '[.[] | select(.deploy.status == "live")] | .[0].deploy.image.ref // empty')
+
+          if [ -z "$PREV_IMAGE" ]; then
+            echo "This is the first production deploy so rollback will not be possible for this run."
+            echo "image=" >> "$GITHUB_OUTPUT"
+          else
+            echo "Saved current version as rollback target: ${PREV_IMAGE}"
+            echo "image=${PREV_IMAGE}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Trigger Render deploy
+        # Render API is called directly so that we can tell it which image tag to use
+        id: deploy
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_PRODUCTION_SERVICE_ID }}
+          IMAGE_REF: ${{ steps.image.outputs.ref }}
+        run: |
+          RESPONSE=$(curl --fail-with-body --silent --show-error \
+            -X POST "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys" \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            -H "Accept: application/json" \
+            -H "Content-Type: application/json" \
+            -d "{\"imageUrl\": \"${IMAGE_REF}\"}")
+
+          DEPLOY_ID=$(echo "$RESPONSE" | jq -r '.id')
+          if [ -z "$DEPLOY_ID" ] || [ "$DEPLOY_ID" = "null" ]; then
+            echo "Render error. Response: $RESPONSE" >&2
+            exit 1
+          fi
+          echo "deploy_id=${DEPLOY_ID}" >> "$GITHUB_OUTPUT"
+          echo "Production deploy started: ${DEPLOY_ID}"
+
+      - name: Wait for Render to finish
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_PRODUCTION_SERVICE_ID }}
+          DEPLOY_ID: ${{ steps.deploy.outputs.deploy_id }}
+        run: |
+          DEADLINE=$((SECONDS + 900))
+          while [ $SECONDS -lt $DEADLINE ]; do
+            STATUS=$(curl --fail-with-body --silent --show-error \
+              "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys/${DEPLOY_ID}" \
+              -H "Authorization: Bearer ${RENDER_API_KEY}" \
+              -H "Accept: application/json" \
+              | jq -r '.status')
+
+            echo "Status: ${STATUS}"
+            case "$STATUS" in
+              live)
+                echo "App is live now!."
+                exit 0
+                ;;
+              build_failed|update_failed|canceled|deactivated)
+                echo "Deploy failed!" >&2
+                exit 1
+                ;;
+              *)
+                sleep 15
+                ;;
+            esac
+          done
+          echo "Timed out after 15 minutes waiting for production." >&2
+          exit 1
+
+      - name: Check /health and /categories endpoints
+        # This step checks two things:
+        # 1) /health - to make sure that the API is up and that the database is connected
+        # 2) /categories - to make sure that the auth wiring is working
+        id: smoke
+        env:
+          PRODUCTION_URL: ${{ vars.PRODUCTION_URL }}
+        run: |
+          : "${PRODUCTION_URL:?PRODUCTION_URL is not set up in Environment variables}"
+
+          echo "Test 1: /health"
+          for attempt in 1 2 3 4 5; do
+            BODY=$(curl --silent --show-error --max-time 10 "${PRODUCTION_URL}/health" || echo "")
+            DB_STATUS=$(echo "$BODY" | jq -r '.database // "missing"' 2>/dev/null || echo "parse_error")
+            if [ "$DB_STATUS" = "ok" ]; then
+              echo "Health check successful!"
+              break
+            fi
+            if [ "$attempt" = "5" ]; then
+              echo "/health failed after 5 attempts - database is not OK!" >&2
+              exit 1
+            fi
+            sleep 10
+          done
+
+          echo "Test 2: /categories/"
+          HTTP_CODE=$(curl --silent --output /dev/null --write-out "%{http_code}" --max-time 10 "${PRODUCTION_URL}/categories/" || echo "000")
+          case "$HTTP_CODE" in
+            2*|4*)
+              echo "Auth check passed (responded with acceptable ${HTTP_CODE})"
+              ;;
+            *)
+              echo "Auth check failed (unexpected error code ${HTTP_CODE})" >&2
+              exit 1
+              ;;
+          esac
+
+  rollback:
+    name: Automatic rollback on failure
+    needs: deploy
+    runs-on: ubuntu-latest
+    # This should only be run if the deploy job failed and the previous image was saved
+    if: failure() && needs.deploy.outputs.previous_image != ''
+
+    environment:
+      name: production
+      url: ${{ vars.PRODUCTION_URL }}
+
+    steps:
+      - name: Redeploy last good image
+        # If the above smoke tests failed, Render needs to redeploy the old image which was saved at the start of the jon
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_PRODUCTION_SERVICE_ID }}
+          PREVIOUS_IMAGE: ${{ needs.deploy.outputs.previous_image }}
+        run: |
+          echo "Smoke tests failed! Production will be rolled back to ${PREVIOUS_IMAGE}"
+          curl --fail-with-body --silent --show-error \
+            -X POST "https://api.render.com/v1/services/${RENDER_SERVICE_ID}/deploys" \
+            -H "Authorization: Bearer ${RENDER_API_KEY}" \
+            -H "Accept: application/json" \
+            -H "Content-Type: application/json" \
+            -d "{\"imageUrl\": \"${PREVIOUS_IMAGE}\"}"
+
+  release:
+    name: Create GitHub Release
+    needs: deploy
+    runs-on: ubuntu-latest
+    # This should only be run if a tag was pushed and the deploy was successful
+    if: success() && startsWith(github.ref, 'refs/tags/v')
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate a changelog
+        # This retrieves all the commits since the last version tag and lists all the titles
+        id: changelog
+        run: |
+          # Find the previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)
+          if [ -z "$PREV_TAG" ]; then
+            echo "No previous tags found - listing all commits on main branch"
+            CHANGELOG=$(git log --pretty=format:"- %s" main 2>/dev/null || git log --pretty=format:"- %s")
+          else
+            echo "Generating changelog from ${PREV_TAG} to ${GITHUB_REF_NAME}"
+            CHANGELOG=$(git log --pretty=format:"- %s" "${PREV_TAG}..${GITHUB_REF_NAME}")
+          fi
+          {
+            echo "log<<HEIT_CHANGELOG_EOF"
+            echo "$CHANGELOG"
+            echo "HEIT_CHANGELOG_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Create Release
+        # using marketplace action (softprops/action-gh-release) to handle the Release setup.
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          body: |
+            **Image deployed:** `${{ needs.deploy.outputs.image_ref }}`
+
+            ## Changes
+            ${{ steps.changelog.outputs.log }}
