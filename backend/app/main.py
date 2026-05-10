@@ -1,8 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
+
 from app.db.database import SessionLocal
-from app.routers import auth, tickets, users, categories
+from app.routers import auth, categories, tickets, users
 
 app = FastAPI(title="HEIT API", version="0.2.0")
 

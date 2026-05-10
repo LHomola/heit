@@ -1,0 +1,52 @@
+name: CodeQL
+
+# CodeQL (static application security testing tool) examines the code for vulnerable patterns (it tracks how data moves through the program).
+# E.g., hard-coded secrets, unsafe deserialisation, and tainted data flows that span function and module boundaries.
+# This workflow will not be included in ci.yml so that a CodeQL problem doesn't block that workflow.
+
+on:
+  push:
+  pull_request:
+
+# If a newer commit is pushed on the same branch while the previous commit's CodeQL run is still in progress, cancel the older run. 
+# This ensures that the result is based on the latest code
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+
+    # Give the minimum permissions needed by this job (least privilege principle)
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
+    strategy:
+      # Ensure to complete both JavaScript and Python analysis even if one fails      
+      fail-fast: false
+      matrix:
+        # Load the followign language packs
+        language: [python, javascript]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          # Using security-extended query which adds security queries on top of the default ones. 
+          # Another suite - security-and-quality - is not used as it overlaps with ruff and eslint
+          queries: security-extended
+
+      # Python and JavaScript do not require a compile step as they are interpreted -> CodeQL can build its call graph from source
+      - name: Perform CodeQL analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          # Make sure that categories are distinguishible when scanned by multiple tools
+          category: "/language:${{ matrix.language }}"

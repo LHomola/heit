@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.core.security import create_access_token, hash_password, verify_password
 from app.core.deps import get_current_user
+from app.core.security import create_access_token, hash_password, verify_password
 from app.db.database import get_db
 from app.models.user import User, UserRole
 from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserResponse
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 def register(body: RegisterRequest, db: Session = Depends(get_db)): #  FastAPI dependency injection that automatically opens closes a database session
     # Confirm that the role is one of the allowed values
     if body.role not in UserRole._value2member_map_:
-        raise HTTPException(status_code=400, detail=f"Role must be one of these: resident, manager, contractor")
+        raise HTTPException(status_code=400, detail="Role must be one of these: resident, manager, contractor")
 
     # Validate that the email isn't already taken
     if db.query(User).filter(User.email == body.email).first():

@@ -1,0 +1,32 @@
+# This file contains configuration for Python tools for HEIT backend.
+
+[tool.ruff]
+# PEP 8's line length of 79 seems too short with resolution of modern monitors while 100 is a good compromise.
+line-length = 100
+
+# Advise ruff which Python language was used for this project
+target-version = "py311"
+
+# exclude Alembic migration files don't need to be checked
+extend-exclude = ["alembic"]
+
+[tool.ruff.lint]
+# Enabling rules
+# E - pycodestyle errors: indentation, whitespace, basic syntax style
+# W - pycodestyle warnings: similar to the avove rule but less critical
+# F - pyflakes: unused imports, undefined names, unreachable code (real bugs)
+# I - isort: import ordering
+# UP - pyupgrade: used for modernising older syntax
+# B - flake8-bugbear: catches idioms that are technically valid but usually wrong (e.g., except clauses that catch too much)
+select = ["E", "W", "F", "I", "UP", "B"]
+
+# Disabling the below rule (Do not perform function call in argument defaults) as FastAPI uses this pattern for dependency injection
+# E501 rule disabled as strict line length enforcement would decrease quality of comments used throughout the project
+ignore = ["B008", "E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# Test files sometimes import fixtures taht they don't reference directly (since pytest finds them using their name) - silencing F401 (unused imports)
+"tests/*" = ["F401"]
+
+# Also silencing F401 in __init__.py files as they sometimes re-export symbols for the package's public API which could then flagged as unused imports by ruff
+"__init__.py" = ["F401"]

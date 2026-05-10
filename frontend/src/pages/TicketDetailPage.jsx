@@ -164,7 +164,7 @@ export default function TicketDetailPage() {
       // Update local ticket state so that the suggestion appears immediately
       const updated = await res.json();
       setTicket(updated);
-    } catch (e) {
+    } catch {
       setAiError("Failed to connect to AI service");
     } finally {
       setAiLoading(false);

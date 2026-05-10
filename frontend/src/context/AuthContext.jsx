@@ -10,7 +10,11 @@ export function AuthProvider({ children }) {
   // When loading for the first time, check if a token is already in localStorage
   useEffect(() => {
     const stored = localStorage.getItem("heit_token");
-    if (!stored) {
+    if (!stored) {      
+      // The rule warns about cascading renders from synchronous setState inside an effect.
+      // Here the setState is on the early exit path (no token to verify) before any async work begins,
+      // so it just unblocks the initial render once. 
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoading(false);
       return;
     }

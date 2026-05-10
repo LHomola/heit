@@ -24,6 +24,26 @@ export default defineConfig([
     },
     rules: {
       'no-unused-vars': ['error', { varsIgnorePattern: '^[A-Z_]' }],
+      // Downgrading react-refresh rule (expects only components to be exported) to a warning to prevent
+      // AuthContext.jsx which exports AuthProvider and useAuth from blocking the CI run
+      'react-refresh/only-export-components': 'warn',
+    },
+  },
+  // Declare variables for ESLint
+  {
+    files: ['**/*.{test,spec}.{js,jsx}', '**/tests/**/*.{js,jsx}'],
+    languageOptions: {
+      globals: {
+        describe: 'readonly',
+        it: 'readonly',
+        test: 'readonly',
+        expect: 'readonly',
+        beforeAll: 'readonly',
+        afterAll: 'readonly',
+        beforeEach: 'readonly',
+        afterEach: 'readonly',
+        vi: 'readonly',
+      },
     },
   },
 ])

@@ -1,7 +1,6 @@
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config
-from sqlalchemy import pool
+from sqlalchemy import engine_from_config, pool
 
 from alembic import context
 
@@ -14,7 +13,9 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-import sys, os
+import os
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import app.models  # noqa — registers User, Category with Base
@@ -36,7 +37,7 @@ def include_object(object, name, type_, reflected, compare_to):
     if type_ == "table" and name not in MODELLED_TABLES:
         return False
     return True
-    
+
 def run_migrations_offline() -> None:
     """Run migrations in 'offline' mode.
 
@@ -77,8 +78,8 @@ def run_migrations_online() -> None:
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, 
-            target_metadata=target_metadata, 
+            connection=connection,
+            target_metadata=target_metadata,
             include_object=include_object,
         )
 

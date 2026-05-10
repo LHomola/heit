@@ -4,9 +4,9 @@ Users router
 Only managers are able to enumerate other users in the system.
 """
 
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from typing import List
 
 from app.core.deps import get_current_user
 from app.db.database import get_db
@@ -16,7 +16,7 @@ from app.schemas.auth import UserSummary
 router = APIRouter(prefix="/users", tags=["users"])
 
 
-@router.get("/", response_model=List[UserSummary])
+@router.get("/", response_model=list[UserSummary])
 def list_users(
     role: str | None = None, # optional role param
     db: Session = Depends(get_db),

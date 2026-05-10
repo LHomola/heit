@@ -1,6 +1,10 @@
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text, Enum as SAEnum, text
-from app.db.database import Base
 import enum
+
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text, text
+from sqlalchemy import Enum as SAEnum
+
+from app.db.database import Base
+
 
 class TicketStatus(str, enum.Enum):
     open        = "open"

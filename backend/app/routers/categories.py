@@ -4,10 +4,10 @@ Categories router - list of ticket categories available to all users
 This endpoints is needed to provide values for the categories dropdown on the form used for creating tickets. The list of categories is sorted alphabetically.
 """
 
+
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
-from typing import List
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
 from app.db.database import get_db
@@ -27,7 +27,7 @@ class CategoryResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-@router.get("/", response_model=List[CategoryResponse])
+@router.get("/", response_model=list[CategoryResponse])
 def list_categories(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user), # authentication is required but not the actual user object

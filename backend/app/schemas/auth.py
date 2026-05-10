@@ -1,7 +1,6 @@
 from datetime import datetime
-from typing import Optional
-from pydantic import BaseModel, EmailStr
 
+from pydantic import BaseModel, EmailStr
 
 # Request
 
@@ -10,7 +9,7 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
     role: str # resident,manager, contractor
-    address: Optional[str] = None
+    address: str | None = None
 
 
 class LoginRequest(BaseModel):
@@ -30,7 +29,7 @@ class UserResponse(BaseModel):
     full_name: str
     email: str
     role: str
-    address: Optional[str]
+    address: str | None
     is_active: bool
     created_at: datetime
 

@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings
 
+
 class Settings(BaseSettings):
     DATABASE_URL: str = "postgresql://heit_user:heit_password@postgres:5432/heit"
     SECRET_KEY: str = "secret_key_string"
