@@ -32,6 +32,7 @@ jobs:
       contents: read
 
     # Store job outputs so that rollback can reference the previous image and release jobs can reference the deployed image
+    outputs:
       image_ref: ${{ steps.image.outputs.ref }}
       previous_image: ${{ steps.previous.outputs.image }}
 
