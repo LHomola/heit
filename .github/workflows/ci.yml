@@ -176,7 +176,7 @@ jobs:
 
       - name: Build image (load locally for scanning)
         # Build the image and load it into the runner's local Docker daemon
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: ./backend
           load: true
@@ -231,7 +231,7 @@ jobs:
           retention-days: 30
 
       - name: Push image to GHCR
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: ./backend
           push: true
