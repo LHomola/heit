@@ -167,7 +167,7 @@ jobs:
         # "sha-<long sha>" is used for every build
         # "latest" is only used on pushes to main so that :latest in the registry never points at a feature-branch
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository_owner }}/heit-backend
           tags: |
