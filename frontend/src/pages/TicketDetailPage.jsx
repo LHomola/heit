@@ -65,6 +65,10 @@ export default function TicketDetailPage() {
   const [visibilityError, setVisibilityError] = useState("");
   const [visibilitySaving, setVisibilitySaving] = useState(false);
 
+  // State for the resident close action
+  const [closeError, setCloseError] = useState("");
+  const [closeLoading, setCloseLoading] = useState(false);
+
   // Load ticket data
   useEffect(() => {
     async function load() {
@@ -168,6 +172,34 @@ export default function TicketDetailPage() {
       setAiError("Failed to connect to AI service");
     } finally {
       setAiLoading(false);
+    }
+  }
+
+  // Handler for closing the ticket (only available to the resident who owns it)
+  async function handleClose() {
+    setCloseError("");
+    setCloseLoading(true);
+    try {
+      const res = await fetch(`/api/tickets/${id}/status`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ status: "closed", note: null }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setCloseError(data.detail || "Failed to close the ticket");
+        return;
+      }
+      // Replace the ticket in local state so the UI updates straight away
+      const updated = await res.json();
+      setTicket(updated);
+    } catch {
+      setCloseError("Failed to connect to the server");
+    } finally {
+      setCloseLoading(false);
     }
   }
 
@@ -387,6 +419,28 @@ export default function TicketDetailPage() {
                 {aiLoading ? "Getting suggestion…" : "Get AI Suggestion"}
               </Button>
             )}
+          </>
+        )}
+
+        {/* Close ticket button - only the resident who owns the ticket can see it */}
+        {currentUser.role === "resident" && ticket.created_by === currentUser.id && (
+          <>
+            <Divider sx={{ my: 3 }} />
+
+            {closeError && <Alert severity="error" sx={{ mb: 2 }}>{closeError}</Alert>}
+
+            <Button
+              variant="outlined"
+              color="error"
+              onClick={handleClose}
+              disabled={ticket.status === "closed" || closeLoading}
+            >
+              {ticket.status === "closed"
+                ? "Ticket closed"
+                : closeLoading
+                  ? "Closing…"
+                  : "Close ticket"}
+            </Button>
           </>
         )}
       </Paper>
