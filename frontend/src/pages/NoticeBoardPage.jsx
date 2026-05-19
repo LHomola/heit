@@ -28,7 +28,6 @@ export default function NoticeBoardPage() {
   // When the user clicks the toggle button, new ordering is retrieved from the server
   const [sort, setSort] = useState("recent");
   useEffect(() => {
-    setLoading(true);
     fetch(`/api/tickets/notice-board?sort=${sort}`, {
       headers: { Authorization: `Bearer ${token}` },
     })
