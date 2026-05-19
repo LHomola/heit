@@ -287,12 +287,13 @@ def update_ticket_status(
     # A user should only be able to update a ticket that they are allowed to see
     _check_ticket_access(ticket, current_user)
 
-    # Residents can view tickets but are not allowed to change their status
+    # Residents can close their own tickets
     if current_user.role == UserRole.resident:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Residents cannot change ticket status",
-        )
+        if body.status != TicketStatus.closed:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Residents can only set status to 'closed'",
+            )
 
     # Contractors can change the status of a ticket to "in_progress" or "resolved"
     # Managers can set any status
