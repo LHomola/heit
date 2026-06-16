@@ -48,7 +48,7 @@ jobs:
       - name: Grype filesystem scan
         id: grype
         continue-on-error: true
-        uses: anchore/scan-action@v6
+        uses: anchore/scan-action@v7
         with:
           path: "."
           # same as Trivy's severity filter
