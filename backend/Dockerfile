@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 # Apply Debian security updates to clear fixable CVEs in the base image's system packages
 RUN apt-get update && \
